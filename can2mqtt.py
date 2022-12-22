@@ -1,3 +1,4 @@
+import signal
 import asyncio
 from typing import Any, List
 
@@ -87,8 +88,8 @@ class HaMqqt:
         self.relays = relays
         self.sensors = sensors
         self.client = mqtt.Client("can2mqtt")
-        mqtt_host = dict({ "hostname": "192.168.4.86", "port": 1883 })
-        self.client.username_pw_set("homeassistant","qwer1234")
+        mqtt_host = dict({ "hostname": "localhost", "port": 1883 })
+        self.client.username_pw_set("homeassistant", "qwer1234")
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
         self.client.on_subscribe = self.on_subscribe
@@ -145,39 +146,59 @@ class HeartbeatReader(Listener):
         for sensor in self.sensors:
             sensor.handleCanMessage(msg.arbitration_id, msg.data, self.client)
 
+class MainApp:
+    def __init__(self):
+        self.shutdown = False
+        signal.signal(signal.SIGINT, self.exit_gracefully)
+        signal.signal(signal.SIGTERM, self.exit_gracefully)
 
-async def main() -> None:
-    relays = [
-        FezzikRelay(0x40, 0, 6, "fez-heater", "Hydronic Heater/Pump"),
-        FezzikRelay(0x40, 1, 7, "fez-eng-preheat", "Engine Preheat"),
-    ]
+        self.relays = [
+            FezzikRelay(0x40, 0, 6, "fez-heater", "Hydronic Heater/Pump"),
+            FezzikRelay(0x40, 1, 7, "fez-eng-preheat", "Engine Preheat"),
+        ]
 
-    sensors = [
-        FezzikSensor(0x40, 0, "fez-heater-input", "Input Coolant Temp")
-    ]
+        self.sensors = [
+            # FezzikSensor(0x40, 0, "fez-heater-input", "Input Coolant Temp")
+        ]
 
-    with can.ThreadSafeBus(
-        interface="socketcan", 
-        channel="can0",
-        bitrate=500000
-    ) as bus:
-        reader = can.AsyncBufferedReader()
-        mqttClient = HaMqqt(relays, sensors, bus);
-        heartbeater = HeartbeatReader(mqttClient, relays, sensors)
+    def exit_gracefully(self, signum, frame):
+        print('Received:', signum)
+        self.shutdown = True
+
+    def start(self):
+        self.bus = can.ThreadSafeBus(
+            interface="socketcan", 
+            channel="can0",
+            bitrate=500000
+        )
+        self.mqttClient = HaMqqt(self.relays, self.sensors, self.bus);
+        self.heartbeater = HeartbeatReader(self.mqttClient, self.relays, self.sensors)
+
+    async def run(self):
+        print("Running app")
+        self.reader = can.AsyncBufferedReader()
 
         listeners: List[MessageRecipient] = [
-            heartbeater,  # Callback function
-            reader,
+            self.heartbeater,
+            self.reader,
         ]
 
         # Create Notifier with an explicit loop to use for scheduling of callbacks
         loop = asyncio.get_running_loop()
-        notifier = can.Notifier(bus, listeners, loop=loop)
+        notifier = can.Notifier(self.bus, listeners, loop=loop)
 
-        mqttClient.loop_it();
-        while True:
-            msg = await reader.get_message()
+        self.mqttClient.loop_it();
+
+        while self.shutdown == False:
+            msg = await self.reader.get_message()
+
+    def stop(self):
+        print("Stop app")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    app = MainApp()
+
+    app.start()
+
+    asyncio.run(app.run())
