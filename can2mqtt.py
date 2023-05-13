@@ -112,10 +112,10 @@ class HaMqqt:
 
         # publish configs
         for relay in self.relays:
-            self.client.publish(relay.configTopic, relay.getConfig())
+            self.client.publish(relay.configTopic, relay.getConfig(), retain=True)
         
         for sensor in self.sensors:
-            self.client.publish(sensor.configTopic, sensor.getConfig())
+            self.client.publish(sensor.configTopic, sensor.getConfig(), retain=True)
 
         # subscribe to everything
         self.client.subscribe(topic_name, 2)
@@ -155,6 +155,7 @@ class MainApp:
         self.relays = [
             FezzikRelay(0x40, 0, 6, "fez-heater", "Hydronic Heater/Pump"),
             FezzikRelay(0x40, 1, 7, "fez-eng-preheat", "Engine Preheat"),
+            FezzikRelay(0x20, 6, 6, "fez-heat-fan", "Hab Heater Fan"),
         ]
 
         self.sensors = [
