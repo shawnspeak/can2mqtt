@@ -156,6 +156,7 @@ class MainApp:
             FezzikRelay(0x40, 0, 6, "fez-heater", "Hydronic Heater/Pump"),
             FezzikRelay(0x40, 1, 7, "fez-eng-preheat", "Engine Preheat"),
             FezzikRelay(0x20, 6, 6, "fez-heat-fan", "Hab Heater Fan"),
+            FezzikRelay(0x30, 0, 6, "fez-water-pump", "Water Pump"),
         ]
 
         self.sensors = [
